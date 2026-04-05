@@ -75,7 +75,6 @@ jobs:
               id: flutter-action
               with:
                   channel: stable
-                  flutter-version-file: pubspec.yaml
                   cache: true
 
             - name: Apply Patch
