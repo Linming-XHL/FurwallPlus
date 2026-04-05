@@ -1,197 +1,174 @@
-name: Build All Platforms
+name: Build
 
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - v*
-  workflow_dispatch:
-    inputs:
-      build_android:
-        description: "Build Android"
-        required: false
-        default: true
-        type: boolean
-      build_ios:
-        description: "Build iOS"
-        required: false
-        default: true
-        type: boolean
-      build_macos:
-        description: "Build macOS"
-        required: false
-        default: true
-        type: boolean
-      build_windows:
-        description: "Build Windows"
-        required: false
-        default: true
-        type: boolean
-      build_linux:
-        description: "Build Linux"
-        required: false
-        default: true
-        type: boolean
+    pull_request:
+        types:
+            - opened
+            - synchronize
+            - reopened
+            - ready_for_review
+        paths-ignore:
+            - "**.md"
+    workflow_dispatch:
+        inputs:
+            build_android:
+                description: "Build Android"
+                required: false
+                default: true
+                type: boolean
+
+            build_ios:
+                description: "Build iOS"
+                required: false
+                default: true
+                type: boolean
+
+            build_mac:
+                description: "Build Mac"
+                required: false
+                default: true
+                type: boolean
+
+            build_win_x64:
+                description: "Build Win-x64"
+                required: false
+                default: true
+                type: boolean
+
+            build_linux_x64:
+                description: "Build Linux-x64"
+                required: false
+                default: true
+                type: boolean
+
+            tag:
+                description: "tag"
+                required: false
+                default: ""
+                type: string
 
 jobs:
-  android:
-    if: ${{ github.event_name == 'push' || github.event.inputs.build_android == 'true' }}
-    name: Build Android
-    runs-on: ubuntu-latest
-    permissions: write-all
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-      - name: Install dependencies
-        run: flutter pub get
-      - name: Build Android
-        run: flutter build apk --release --split-per-abi
-      - name: Rename APK files
-        run: |
-          for file in build/app/outputs/flutter-apk/app-*-release.apk; do
-            abi=$(echo "$file" | sed -E 's|.*app-(.*)-release\.apk|\1|')
-            mv "$file" "FurwallPlus_android_${{ github.ref_name }}_${abi}.apk"
-          done
-        shell: bash
-      - name: Upload Android artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-build
-          path: FurwallPlus_android_*.apk
-      - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
-        with:
-          files: FurwallPlus_android_*.apk
+    android:
+        if: ${{ (github.event_name == 'pull_request' && github.repository == 'bggRGjQaUbCoE/PiliPlus') || github.event.inputs.build_android == 'true' }}
+        name: Release Android
+        runs-on: ubuntu-latest
+        permissions: write-all
 
-  ios:
-    if: ${{ github.event_name == 'push' || github.event.inputs.build_ios == 'true' }}
-    name: Build iOS
-    runs-on: macos-latest
-    permissions: write-all
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-      - name: Install dependencies
-        run: flutter pub get
-      - name: Build iOS
-        run: |
-          flutter build ios --release --no-codesign
-          ln -sf ./build/ios/iphoneos Payload
-          find Payload/Runner.app/Frameworks -type d -name "*.framework" -exec codesign --force --sign - --preserve-metadata=identifier,entitlements {} \;
-          zip -r9 FurwallPlus_ios_${{ github.ref_name }}.ipa Payload/Runner.app
-      - name: Upload iOS artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-build
-          path: FurwallPlus_ios_*.ipa
-      - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
-        with:
-          files: FurwallPlus_ios_*.ipa
+        steps:
+            - name: 代码迁出
+              uses: actions/checkout@v6
+              with:
+                  fetch-depth: 0
 
-  macos:
-    if: ${{ github.event_name == 'push' || github.event.inputs.build_macos == 'true' }}
-    name: Build macOS
-    runs-on: macos-latest
-    permissions: write-all
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-      - name: Install dependencies
-        run: flutter pub get
-      - name: Build macOS
-        run: flutter build macos --release
-      - name: Create DMG
-        run: |
-          npm install --global create-dmg
-          create-dmg build/macos/Build/Products/Release/FurwallPlus.app || true
-          mv FurwallPlus*.dmg FurwallPlus_macos_${{ github.ref_name }}.dmg
-        continue-on-error: true
-      - name: Upload macOS artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-build
-          path: FurwallPlus_macos_*.dmg
-      - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
-        with:
-          files: FurwallPlus_macos_*.dmg
+            - name: 构建Java环境
+              uses: actions/setup-java@v5
+              with:
+                  distribution: "zulu"
+                  java-version: "17"
+                  cache: "gradle"
+                  cache-dependency-path: |
+                      android/*.gradle*
+                      android/**/gradle-wrapper.properties
 
-  windows:
-    if: ${{ github.event_name == 'push' || github.event.inputs.build_windows == 'true' }}
-    name: Build Windows
-    runs-on: windows-latest
-    permissions: write-all
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-      - name: Install dependencies
-        run: flutter pub get
-      - name: Build Windows
-        run: flutter build windows --release
-      - name: Prepare Windows artifacts
-        run: |
-          New-Item -ItemType Directory -Force -Path "Release"
-          New-Item -ItemType Directory -Force -Path "FurwallPlus-Win"
-          Copy-Item -Path "build/windows/x64/runner/Release/*" -Destination "FurwallPlus-Win/" -Recurse
-          Compress-Archive -Path "FurwallPlus-Win" -DestinationPath "FurwallPlus_windows_${{ github.ref_name }}_x64.zip"
-        shell: pwsh
-      - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-build
-          path: FurwallPlus_windows_*.zip
-      - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
-        with:
-          files: FurwallPlus_windows_*.zip
+            - name: 安装Flutter
+              uses: subosito/flutter-action@v2
+              id: flutter-action
+              with:
+                  channel: stable
+                  flutter-version-file: pubspec.yaml
+                  cache: true
 
-  linux:
-    if: ${{ github.event_name == 'push' || github.event.inputs.build_linux == 'true' }}
-    name: Build Linux
-    runs-on: ubuntu-latest
-    permissions: write-all
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake ninja-build pkg-config libgtk-3-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev libasound2-dev libpulse-dev libdbus-1-dev
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+            - name: Apply Patch
+              shell: pwsh
+              run: lib/scripts/patch.ps1 android
+              continue-on-error: true
+
+            - name: Write key
+              if: github.event_name == 'workflow_dispatch'
+              run: |
+                  if [ ! -z "${{ secrets.SIGN_KEYSTORE_BASE64 }}" ]; then
+                    echo "${{ secrets.SIGN_KEYSTORE_BASE64 }}" | base64 --decode > android/app/key.jks
+                    echo storeFile='key.jks' >> android/key.properties
+                    echo storePassword='${{ secrets.KEYSTORE_PASSWORD }}' >> android/key.properties
+                    echo keyAlias='${{ secrets.KEY_ALIAS }}' >> android/key.properties
+                    echo keyPassword='${{ secrets.KEY_PASSWORD }}' >> android/key.properties
+                  fi
+
+            - name: Set and Extract version
+              if: ${{ github.event_name == 'workflow_dispatch' }}
+              shell: pwsh
+              run: lib/scripts/build.ps1 android
+
+            - name: Flutter Build Release Apk
+              if: ${{ github.event_name == 'workflow_dispatch' }}
+              run: flutter build apk --release --split-per-abi --dart-define-from-file=pili_release.json --pub
+
+            - name: Flutter Build Dev Apk
+              if: ${{ github.event_name == 'pull_request' }}
+              run: |
+                flutter build apk --release --split-per-abi --android-project-arg dev=1 --pub
+
+            - name: Rename
+              run: |
+                  for file in build/app/outputs/flutter-apk/app-*-release.apk; do
+                    abi=$(echo "$file" | sed -E 's|.*app-(.*)-release\.apk|\1|')
+                    mv "$file" "FurwallPlus_android_${{ env.version }}_${abi}.apk"
+                  done
+              shell: bash
+
+            - name: Release
+              if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag != '' }}
+              uses: softprops/action-gh-release@v2
+              with:
+                  tag_name: ${{ github.event.inputs.tag }}
+                  name: ${{ github.event.inputs.tag }}
+                  files: FurwallPlus_android_*.apk
+
+            - name: 上传
+              uses: actions/upload-artifact@v7
+              with:
+                  archive: false
+                  name: Android_arm64-v8a
+                  path: FurwallPlus_android_*_arm64-v8a.apk
+
+            - name: 上传
+              uses: actions/upload-artifact@v7
+              with:
+                  archive: false
+                  name: Android_armeabi-v7a
+                  path: FurwallPlus_android_*_armeabi-v7a.apk
+
+            - name: 上传
+              uses: actions/upload-artifact@v7
+              with:
+                  archive: false
+                  name: Android_x86_64
+                  path: FurwallPlus_android_*_x86_64.apk
+
+    ios:
+        if: ${{ (github.event_name == 'pull_request' && github.repository == 'bggRGjQaUbCoE/PiliPlus') || github.event.inputs.build_ios == 'true' }}
+        uses: ./.github/workflows/ios.yml
+        permissions: write-all
         with:
-          channel: stable
-      - name: Install dependencies
-        run: flutter pub get
-      - name: Build Linux
-        run: flutter build linux --release
-      - name: Package Linux
-        run: |
-          tar -zcvf FurwallPlus_linux_${{ github.ref_name }}_x64.tar.gz -C build/linux/x64/release/bundle .
-      - name: Upload Linux artifact
-        uses: actions/upload-artifact@v4
+            tag: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || '' }}
+
+    mac:
+        if: ${{ github.event.inputs.build_mac == 'true' }}
+        uses: ./.github/workflows/mac.yml
+        permissions: write-all
         with:
-          name: linux-build
-          path: FurwallPlus_linux_*.tar.gz
-      - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
+            tag: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || '' }}
+
+    win_x64:
+        if: ${{ (github.event_name == 'pull_request' && github.repository == 'bggRGjQaUbCoE/PiliPlus') || github.event.inputs.build_win_x64 == 'true' }}
+        uses: ./.github/workflows/win_x64.yml
+        permissions: write-all
         with:
-          files: FurwallPlus_linux_*.tar.gz
+            tag: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || '' }}
+
+    linux_x64:
+        if: ${{ github.event.inputs.build_linux_x64 == 'true' }}
+        uses: ./.github/workflows/linux_x64.yml
+        permissions: write-all
+        with:
+            tag: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || '' }}
