@@ -6,55 +6,40 @@ on:
       - main
     tags:
       - v*
+  workflow_dispatch:
+    inputs:
+      build_android:
+        description: "Build Android"
+        required: false
+        default: true
+        type: boolean
+      build_ios:
+        description: "Build iOS"
+        required: false
+        default: true
+        type: boolean
+      build_macos:
+        description: "Build macOS"
+        required: false
+        default: true
+        type: boolean
+      build_windows:
+        description: "Build Windows"
+        required: false
+        default: true
+        type: boolean
+      build_linux:
+        description: "Build Linux"
+        required: false
+        default: true
+        type: boolean
 
 jobs:
-  build-windows:
-    runs-on: windows-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-      - name: Install dependencies
-        run: flutter pub get
-      - name: Build Windows
-        run: flutter build windows
-      - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-build
-          path: build/windows/runner/Release/
-
-  build-linux:
+  android:
+    if: ${{ github.event_name == 'push' || github.event.inputs.build_android == 'true' }}
+    name: Build Android
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-      - name: Install dependencies
-        run: flutter pub get
-      - name: Build Linux
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake ninja-build pkg-config libgtk-3-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev libasound2-dev libpulse-dev libdbus-1-dev
-          flutter build linux
-      - name: Upload Linux artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-build
-          path: build/linux/x64/release/bundle/
-
-  build-android:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    permissions: write-all
     steps:
       - uses: actions/checkout@v4
       - name: Set up Flutter
@@ -65,16 +50,29 @@ jobs:
         run: flutter pub get
       - name: Build Android
         run: flutter build apk --release --split-per-abi
-      - name: Upload Android artifact
+      - name: Rename APK files
+        run: |
+          for file in build/app/outputs/flutter-apk/app-*-release.apk; do
+            abi=$(echo "$file" | sed -E 's|.*app-(.*)-release\.apk|\1|')
+            mv "$file" "FurwallPlus_android_${{ github.ref_name }}_${abi}.apk"
+          done
+        shell: bash
+      - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
         with:
           name: android-build
-          path: build/app/outputs/flutter-apk/
+          path: FurwallPlus_android_*.apk
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: FurwallPlus_android_*.apk
 
-  build-macos-ios:
+  ios:
+    if: ${{ github.event_name == 'push' || github.event.inputs.build_ios == 'true' }}
+    name: Build iOS
     runs-on: macos-latest
-    permissions:
-      contents: write
+    permissions: write-all
     steps:
       - uses: actions/checkout@v4
       - name: Set up Flutter
@@ -84,41 +82,115 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
       - name: Build iOS
-        run: flutter build ios --release --no-codesign
-        continue-on-error: true
-      - name: Build macOS
-        run: flutter build macos
+        run: |
+          flutter build ios --release --no-codesign
+          ln -sf ./build/ios/iphoneos Payload
+          find Payload/Runner.app/Frameworks -type d -name "*.framework" -exec codesign --force --sign - --preserve-metadata=identifier,entitlements {} \;
+          zip -r9 FurwallPlus_ios_${{ github.ref_name }}.ipa Payload/Runner.app
       - name: Upload iOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: ios-build
-          path: build/ios/iphoneos/
+          path: FurwallPlus_ios_*.ipa
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: FurwallPlus_ios_*.ipa
+
+  macos:
+    if: ${{ github.event_name == 'push' || github.event.inputs.build_macos == 'true' }}
+    name: Build macOS
+    runs-on: macos-latest
+    permissions: write-all
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Build macOS
+        run: flutter build macos --release
+      - name: Create DMG
+        run: |
+          npm install --global create-dmg
+          create-dmg build/macos/Build/Products/Release/FurwallPlus.app || true
+          mv FurwallPlus*.dmg FurwallPlus_macos_${{ github.ref_name }}.dmg
+        continue-on-error: true
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: macos-build
-          path: build/macos/Build/Products/Release/
-
-  create-release:
-    needs: [build-windows, build-linux, build-android, build-macos-ios]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    if: startsWith(github.ref, 'refs/tags/')
-    steps:
-      - uses: actions/checkout@v4
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
+          path: FurwallPlus_macos_*.dmg
       - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            artifacts/windows-build/furwallplus.exe
-            artifacts/linux-build/furwallplus
-            artifacts/android-build/*.apk
-            artifacts/ios-build/Runner.app
-            artifacts/macos-build/furwallplus.app
-          draft: false
-          prerelease: false
+          files: FurwallPlus_macos_*.dmg
+
+  windows:
+    if: ${{ github.event_name == 'push' || github.event.inputs.build_windows == 'true' }}
+    name: Build Windows
+    runs-on: windows-latest
+    permissions: write-all
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Build Windows
+        run: flutter build windows --release
+      - name: Prepare Windows artifacts
+        run: |
+          New-Item -ItemType Directory -Force -Path "Release"
+          Copy-Item -Path "build/windows/runner/Release/*" -Destination "Release/" -Recurse
+          Compress-Archive -Path "Release" -DestinationPath "FurwallPlus_windows_${{ github.ref_name }}_x64.zip"
+        shell: pwsh
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: FurwallPlus_windows_*.zip
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: FurwallPlus_windows_*.zip
+
+  linux:
+    if: ${{ github.event_name == 'push' || github.event.inputs.build_linux == 'true' }}
+    name: Build Linux
+    runs-on: ubuntu-latest
+    permissions: write-all
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build pkg-config libgtk-3-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev libasound2-dev libpulse-dev libdbus-1-dev
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Build Linux
+        run: flutter build linux --release
+      - name: Package Linux
+        run: |
+          tar -zcvf FurwallPlus_linux_${{ github.ref_name }}_x64.tar.gz -C build/linux/x64/release/bundle .
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: FurwallPlus_linux_*.tar.gz
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: FurwallPlus_linux_*.tar.gz
