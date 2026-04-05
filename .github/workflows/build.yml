@@ -22,11 +22,15 @@ jobs:
         run: flutter pub get
       - name: Build Windows
         run: flutter build windows
+      - name: Create Windows zip package
+        run: |
+          cd build/windows/x64/runner/Release
+          Compress-Archive -Path * -DestinationPath ../../../../../windows-build.zip
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
-          path: build/windows/x64/runner/Release/
+          path: windows-build.zip
 
   build-android:
     runs-on: ubuntu-latest
@@ -64,7 +68,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            artifacts/windows-build/**
+            artifacts/windows-build/windows-build.zip
             artifacts/android-build/*.apk
           draft: false
           prerelease: false
