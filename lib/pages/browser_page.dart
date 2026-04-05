@@ -15,6 +15,7 @@ class _BrowserPageState extends State<BrowserPage> {
   InAppWebViewController? _controller;
   String _userAgent = '';
   bool _isLoading = true;
+  double _progress = 0;
   bool _hasError = false;
   String _errorMessage = '';
 
@@ -45,37 +46,59 @@ class _BrowserPageState extends State<BrowserPage> {
 
     return Scaffold(
       body: SafeArea(
-        child: Stack(
+        child: Column(
           children: [
-            InAppWebView(
-              initialUrlRequest: URLRequest(url: WebUri(sourceUrl)),
-              initialSettings: InAppWebViewSettings(
-                userAgent: _userAgent,
-                javaScriptEnabled: true,
-                cacheEnabled: true,
-                transparentBackground: false,
-                offscreenPreRaster: true,
-              ),
-              onWebViewCreated: (controller) => _controller = controller,
-              onLoadStart: (controller, url) => setState(() => _isLoading = true),
-              onLoadStop: (controller, url) {
-                setState(() => _isLoading = false);
-                if (_isMobile) {
-                  controller.evaluateJavascript(source: removeAppBannerJS);
-                }
-              },
-              onReceivedError: (controller, request, error) => _handleError(error.description),
-              onReceivedHttpError: (controller, request, error) => _handleError('HTTP ${error.statusCode}'),
-              onReceivedServerTrustAuthRequest: (controller, challenge) async {
-                final shouldProceed = await _showSslDialog();
-                if (shouldProceed) {
-                  return ServerTrustAuthResponse(action: ServerTrustAuthResponseAction.PROCEED);
-                }
-                return ServerTrustAuthResponse(action: ServerTrustAuthResponseAction.CANCEL);
-              },
-            ),
             if (_isLoading)
-              const Center(child: CircularProgressIndicator()),
+              LinearProgressIndicator(
+                value: _progress,
+                backgroundColor: Colors.grey[200],
+                valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
+                minHeight: 3,
+              ),
+            Expanded(
+              child: InAppWebView(
+                initialUrlRequest: URLRequest(url: WebUri(sourceUrl)),
+                initialSettings: InAppWebViewSettings(
+                  userAgent: _userAgent,
+                  javaScriptEnabled: true,
+                  cacheEnabled: true,
+                  transparentBackground: false,
+                  offscreenPreRaster: true,
+                  javaScriptCanOpenWindowsAutomatically: false,
+                  allowsInlineMediaPlayback: true,
+                ),
+                onWebViewCreated: (controller) => _controller = controller,
+                onLoadStart: (controller, url) {
+                  setState(() {
+                    _isLoading = true;
+                    _progress = 0;
+                  });
+                },
+                onLoadStop: (controller, url) {
+                  setState(() {
+                    _isLoading = false;
+                    _progress = 1.0;
+                  });
+                  if (_isMobile) {
+                    controller.evaluateJavascript(source: removeAppBannerJS);
+                  }
+                },
+                onProgressChanged: (controller, progress) {
+                  setState(() {
+                    _progress = progress / 100;
+                  });
+                },
+                onReceivedError: (controller, request, error) => _handleError(error.description),
+                onReceivedHttpError: (controller, request, error) => _handleError('HTTP ${error.statusCode}'),
+                onReceivedServerTrustAuthRequest: (controller, challenge) async {
+                  final shouldProceed = await _showSslDialog();
+                  if (shouldProceed) {
+                    return ServerTrustAuthResponse(action: ServerTrustAuthResponseAction.PROCEED);
+                  }
+                  return ServerTrustAuthResponse(action: ServerTrustAuthResponseAction.CANCEL);
+                },
+              ),
+            ),
           ],
         ),
       ),
@@ -113,6 +136,7 @@ class _BrowserPageState extends State<BrowserPage> {
       _hasError = true;
       _errorMessage = message;
       _isLoading = false;
+      _progress = 0;
     });
   }
 
