@@ -72,6 +72,10 @@ class _BrowserPageState extends State<BrowserPage> {
                 javaScriptCanOpenWindowsAutomatically: false,
                 allowsInlineMediaPlayback: true,
                 mixedContentMode: MixedContentMode.MIXED_CONTENT_ALWAYS_ALLOW,
+                mediaPlaybackRequiresUserGesture: false,
+                allowsAirPlayForMediaPlayback: true,
+                allowsPictureInPictureMediaPlayback: true,
+                isMediaPlaybackRequiresUserGestureEnabled: false,
               ),
               onWebViewCreated: (controller) => _controller = controller,
               onLoadStart: (controller, url) {
