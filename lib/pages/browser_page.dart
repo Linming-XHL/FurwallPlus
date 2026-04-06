@@ -1,8 +1,6 @@
 import 'dart:io';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:http/http.dart' as http;
 import '../utils/constants.dart';
 import '../utils/user_agent.dart';
 
@@ -25,57 +23,11 @@ class _BrowserPageState extends State<BrowserPage> {
   void initState() {
     super.initState();
     _initUserAgent();
-    _checkForUpdates();
   }
 
   Future<void> _initUserAgent() async {
     final ua = await UserAgentGenerator.generate();
     setState(() => _userAgent = ua);
-  }
-
-  Future<void> _checkForUpdates() async {
-    try {
-      final response = await http.get(Uri.parse('https://api.github.com/repos/Linming-XHL/FurwallPlus/releases/latest'));
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final latestVersion = data['tag_name'];
-        if (latestVersion != 'v1.0.8') {
-          _showUpdateDialog(latestVersion);
-        }
-      }
-    } catch (e) {
-      // 忽略更新检查错误
-    }
-  }
-
-  void _showUpdateDialog(String latestVersion) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('发现新版本'),
-        content: Text('当前版本: v1.0.8\n最新版本: $latestVersion\n\n是否前往下载更新？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('暂不更新'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _openUpdatePage();
-            },
-            child: const Text('立即更新'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _openUpdatePage() {
-    InAppBrowser.openWithSystemBrowser(
-      url: WebUri('https://github.com/Linming-XHL/FurwallPlus/releases/latest'),
-    );
   }
 
   bool get _isMobile => Platform.isAndroid || Platform.isIOS;
