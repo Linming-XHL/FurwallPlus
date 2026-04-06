@@ -26,9 +26,9 @@ android {
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        // 自动获取版本号
-        versionCode = 1
-        versionName = "1.0.13"
+        // 使用Flutter传递的版本号
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
     }
 
     buildTypes {
