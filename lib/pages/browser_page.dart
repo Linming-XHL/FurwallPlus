@@ -75,7 +75,6 @@ class _BrowserPageState extends State<BrowserPage> {
                 mediaPlaybackRequiresUserGesture: false,
                 allowsAirPlayForMediaPlayback: true,
                 allowsPictureInPictureMediaPlayback: true,
-                isMediaPlaybackRequiresUserGestureEnabled: false,
               ),
               onWebViewCreated: (controller) => _controller = controller,
               onLoadStart: (controller, url) {
