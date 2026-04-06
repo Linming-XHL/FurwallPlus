@@ -103,6 +103,18 @@ class _BrowserPageState extends State<BrowserPage> {
                 }
                 return ServerTrustAuthResponse(action: ServerTrustAuthResponseAction.CANCEL);
               },
+              shouldOverrideUrlLoading: (controller, navigationAction) async {
+                final url = navigationAction.request.url;
+                if (url != null) {
+                  final scheme = url.scheme.toLowerCase();
+                  if (scheme != 'http' && scheme != 'https') {
+                    // 处理自定义协议，使用系统应用打开
+                    await InAppBrowser.openWithSystemBrowser(url: url);
+                    return NavigationActionPolicy.CANCEL;
+                  }
+                }
+                return NavigationActionPolicy.ALLOW;
+              },
             ),
           ),
         ],
