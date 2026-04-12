@@ -31,11 +31,18 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            keyAlias = System.getenv("FURWALLPLUS_KEY_ALIAS") ?: "furwallplus"
+            keyPassword = System.getenv("FURWALLPLUS_KEY_PASSWORD") ?: "furwallplus"
+            storeFile = file(System.getenv("FURWALLPLUS_STORE_FILE") ?: "../furwallplus.keystore")
+            storePassword = System.getenv("FURWALLPLUS_STORE_PASSWORD") ?: "furwallplus"
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }

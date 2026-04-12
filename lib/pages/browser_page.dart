@@ -44,83 +44,94 @@ class _BrowserPageState extends State<BrowserPage> {
       return _buildErrorView();
     }
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF1F2233),
-      appBar: AppBar(
+    return WillPopScope(
+      onWillPop: () async {
+        if (_controller != null) {
+          if (await _controller!.canGoBack()) {
+            await _controller!.goBack();
+            return false;
+          }
+        }
+        return true;
+      },
+      child: Scaffold(
         backgroundColor: const Color(0xFF1F2233),
-        elevation: 0,
-        toolbarHeight: 0,
-      ),
-      body: Column(
-        children: [
-          if (_isLoading)
-            LinearProgressIndicator(
-              value: _progress,
-              backgroundColor: Colors.grey[800],
-              valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
-              minHeight: 3,
-            ),
-          Expanded(
-            child: InAppWebView(
-              initialUrlRequest: URLRequest(url: WebUri(sourceUrl)),
-              initialSettings: InAppWebViewSettings(
-                userAgent: _userAgent,
-                javaScriptEnabled: true,
-                cacheEnabled: true,
-                transparentBackground: false,
-                offscreenPreRaster: true,
-                javaScriptCanOpenWindowsAutomatically: false,
-                allowsInlineMediaPlayback: true,
-                mixedContentMode: MixedContentMode.MIXED_CONTENT_ALWAYS_ALLOW,
-                mediaPlaybackRequiresUserGesture: false,
-                allowsAirPlayForMediaPlayback: true,
-                allowsPictureInPictureMediaPlayback: true,
+        appBar: AppBar(
+          backgroundColor: const Color(0xFF1F2233),
+          elevation: 0,
+          toolbarHeight: 0,
+        ),
+        body: Column(
+          children: [
+            if (_isLoading)
+              LinearProgressIndicator(
+                value: _progress,
+                backgroundColor: Colors.grey[800],
+                valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
+                minHeight: 3,
               ),
-              onWebViewCreated: (controller) => _controller = controller,
-              onLoadStart: (controller, url) {
-                setState(() {
-                  _isLoading = true;
-                  _progress = 0;
-                });
-              },
-              onLoadStop: (controller, url) {
-                setState(() {
-                  _isLoading = false;
-                  _progress = 1.0;
-                });
-                if (_isMobile) {
-                  controller.evaluateJavascript(source: removeAppBannerJS);
-                }
-              },
-              onProgressChanged: (controller, progress) {
-                setState(() {
-                  _progress = progress / 100;
-                });
-              },
-              onReceivedError: (controller, request, error) => _handleError(error.description),
-              onReceivedHttpError: (controller, request, error) => _handleError('HTTP ${error.statusCode}'),
-              onReceivedServerTrustAuthRequest: (controller, challenge) async {
-                final shouldProceed = await _showSslDialog();
-                if (shouldProceed) {
-                  return ServerTrustAuthResponse(action: ServerTrustAuthResponseAction.PROCEED);
-                }
-                return ServerTrustAuthResponse(action: ServerTrustAuthResponseAction.CANCEL);
-              },
-              shouldOverrideUrlLoading: (controller, navigationAction) async {
-                final url = navigationAction.request.url;
-                if (url != null) {
-                  final scheme = url.scheme.toLowerCase();
-                  if (scheme != 'http' && scheme != 'https') {
-                    // 处理自定义协议，使用系统应用打开
-                    await InAppBrowser.openWithSystemBrowser(url: url);
-                    return NavigationActionPolicy.CANCEL;
+            Expanded(
+              child: InAppWebView(
+                initialUrlRequest: URLRequest(url: WebUri(sourceUrl)),
+                initialSettings: InAppWebViewSettings(
+                  userAgent: _userAgent,
+                  javaScriptEnabled: true,
+                  cacheEnabled: true,
+                  transparentBackground: false,
+                  offscreenPreRaster: true,
+                  javaScriptCanOpenWindowsAutomatically: false,
+                  allowsInlineMediaPlayback: true,
+                  mixedContentMode: MixedContentMode.MIXED_CONTENT_ALWAYS_ALLOW,
+                  mediaPlaybackRequiresUserGesture: false,
+                  allowsAirPlayForMediaPlayback: true,
+                  allowsPictureInPictureMediaPlayback: true,
+                ),
+                onWebViewCreated: (controller) => _controller = controller,
+                onLoadStart: (controller, url) {
+                  setState(() {
+                    _isLoading = true;
+                    _progress = 0;
+                  });
+                },
+                onLoadStop: (controller, url) {
+                  setState(() {
+                    _isLoading = false;
+                    _progress = 1.0;
+                  });
+                  if (_isMobile) {
+                    controller.evaluateJavascript(source: removeAppBannerJS);
                   }
-                }
-                return NavigationActionPolicy.ALLOW;
-              },
+                },
+                onProgressChanged: (controller, progress) {
+                  setState(() {
+                    _progress = progress / 100;
+                  });
+                },
+                onReceivedError: (controller, request, error) => _handleError(error.description),
+                onReceivedHttpError: (controller, request, error) => _handleError('HTTP ${error.statusCode}'),
+                onReceivedServerTrustAuthRequest: (controller, challenge) async {
+                  final shouldProceed = await _showSslDialog();
+                  if (shouldProceed) {
+                    return ServerTrustAuthResponse(action: ServerTrustAuthResponseAction.PROCEED);
+                  }
+                  return ServerTrustAuthResponse(action: ServerTrustAuthResponseAction.CANCEL);
+                },
+                shouldOverrideUrlLoading: (controller, navigationAction) async {
+                  final url = navigationAction.request.url;
+                  if (url != null) {
+                    final scheme = url.scheme.toLowerCase();
+                    if (scheme != 'http' && scheme != 'https') {
+                      // 处理自定义协议，使用系统应用打开
+                      await InAppBrowser.openWithSystemBrowser(url: url);
+                      return NavigationActionPolicy.CANCEL;
+                    }
+                  }
+                  return NavigationActionPolicy.ALLOW;
+                },
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -150,6 +161,23 @@ class _BrowserPageState extends State<BrowserPage> {
                 _controller?.reload();
               },
               child: const Text('重试'),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: () async {
+                setState(() {
+                  _hasError = false;
+                  _errorMessage = '';
+                });
+                if (_controller != null) {
+                  if (await _controller!.canGoBack()) {
+                    await _controller!.goBack();
+                  } else {
+                    _controller?.loadUrl(urlRequest: URLRequest(url: WebUri(sourceUrl)));
+                  }
+                }
+              },
+              child: const Text('返回上级页面'),
             ),
           ],
         ),
